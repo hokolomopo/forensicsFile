@@ -10,4 +10,12 @@ Exercise 2
 ** ANSWER HERE **
 
 Exercise 3
-** ANSWER HERE **
+We start by looking at the sectors used with the command : 
+Sudo fdisk -l 
+That show that the disk used 132172 sectors and that the device used 129024 sectors so there are 132172-131071-1 so 1100 sectors that are available to hid data. 
+Thanks to dd : 
+dd if=evidence.img bs=512 skip=131072 count=1100 | xxd
+We can see that the magic number is ffd8 so it is a jpg file. 
+We extract the file thanks to :
+dd if=evidence.img bs=512 skip=131072 count=1100 of=photo.jpg
+And we get the picture of the teachers and assistants in a restaurant.
