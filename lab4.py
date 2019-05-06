@@ -1,4 +1,6 @@
-
+import sys, traceback
+import os
+import ntpath
 
 def readMBR(file):
     MBR = []
@@ -26,6 +28,19 @@ def bToDec(b):
     return (int.from_bytes(b, "little"))
 
 if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        print("The number of argument need to be 3.")
+        exit(-1)
+    ifEqual, diskimg = sys.argv[1].split("=", 1)
+    part, primarypart = sys.argv[2].split("=", 1)
+    file_abs = sys.argv[3]
+    if diskimg != "evidence" or os.path.isabs(file_abs)==False:
+        print("Error in the command.")
+        exit(-1)
+
+    path = []
+    path.append(file_abs.split("/"))
+    print(path[1:])
     file = open("evidence.img", "rb")
 
     fatAddr = readMBR(file)
