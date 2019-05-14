@@ -43,7 +43,7 @@ def bToDec(b):
     return (int.from_bytes(b, "little"))
 
 def readSecNumber(num, number=1):
-    file = open("evidence.img", "rb")
+    file = open(FILE, "rb")
     file.read(num * 512)
     return file.read(512 * number)
 
@@ -88,10 +88,14 @@ if __name__ == "__main__":
         print("Error in the command.")
         exit(-1)
 
+    FILE = diskimg
+    partNumber = int(primarypart)
+
     path = []
-    path.append(file_abs.split("/"))
-    print(path[1:])
-    file = open("evidence.img", "rb")
+    path = file_abs.split("/")
+    path = path[1:]
+
+    file = open(FILE, "rb")
 
     fatAddr = readMBR(file)
     fatsec = int(fatAddr / 512)
@@ -175,10 +179,12 @@ if __name__ == "__main__":
 
 
     slack = file[size:]
-
-    slackHex = []
-    for b in slack:
-        slackHex.append(format(b, 'x'))
-    print(slackHex)
+    
+    for i in range(int(len(slack) / 8)):
+        formatted = "{:02x}{:02x} {:02x}{:02x} {:02x}{:02x} {:02x}{:02x}".format(
+            slack[i], slack[i+1],slack[i+2],slack[i+3],
+            slack[i+4],slack[i+5],slack[i+6],slack[i+7])
+        print(formatted)
+        
 
 
