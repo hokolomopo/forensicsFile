@@ -1,3 +1,7 @@
+
+partNumber = 0
+FILE = ""
+
 import sys, traceback
 import os
 import ntpath
@@ -19,6 +23,17 @@ def readMBR(file):
 
             print(bToDec(partition[12:16]) * 512)
 
+    partition = MBR[partNumber]
+    type = partition[4]
+
+    if(type == 12):
+        addr = partition[8:12]
+        addr = bToDec(addr) #in clusters
+        addr = addr * 512 #in bytes
+    else:
+        raise Exception('Wrong partition type, type is : {}'.format(type))
+
+
     # go to FAT partition
     file.read(addr - 512) # -512 because we already read the first cluster
 
@@ -27,6 +42,41 @@ def readMBR(file):
 def bToDec(b):
     return (int.from_bytes(b, "little"))
 
+def readSecNumber(num, number=1):
+    file = open(FILE, "rb")
+    file.read(num * 512)
+    return file.read(512 * number)
+
+def firstSec(N, BPB_SecPerClus, FirstDataSector):
+    a = ((N - 2) * BPB_SecPerClus) + FirstDataSector
+    return a
+
+def parseDir(dir, toFind="", type="dir"):
+    for i in range(100):
+        offset = i*32
+        name = dir[0 + offset:11 + offset]
+        addrLO = dir[26 + offset:28 + offset]
+        addrHI = dir[20 + offset:22 + offset]
+        attr = dir[11 + offset:12 + offset]
+        addr = addrLO + addrHI
+        size = bToDec(dir[28 + offset:32 + offset])
+        if(bToDec(name) == 0):
+            break
+
+        print("Name : ",name," ,Adr  :", bToDec(addr), " ,Attr : ", bToDec(attr))
+
+        if(type == "dir"):
+            att = 16
+        if(type == "file"):
+            att = 32
+
+        name = str(name)[2:]
+        attr = bToDec(attr)
+        if(att == attr and name.startswith(toFind)):
+            return bToDec(addr), size
+    
+    return -1, -1
+
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("The number of argument need to be 3.")
@@ -34,23 +84,28 @@ if __name__ == "__main__":
     ifEqual, diskimg = sys.argv[1].split("=", 1)
     part, primarypart = sys.argv[2].split("=", 1)
     file_abs = sys.argv[3]
-    if diskimg != "evidence" or os.path.isabs(file_abs)==False:
+    if os.path.isabs(file_abs)==False:
         print("Error in the command.")
         exit(-1)
 
+    FILE = diskimg
+    partNumber = int(primarypart)
+
     path = []
-    path.append(file_abs.split("/"))
-    print(path[1:])
-    file = open("evidence.img", "rb")
+    path = file_abs.split("/")
+    path = path[1:]
+
+    file = open(FILE, "rb")
 
     fatAddr = readMBR(file)
+    fatsec = int(fatAddr / 512)
 
     print("FAT")
    
     MBR = []
     fatBS = file.read(512)
-    for i in range(8):
-        print(fatBS[i*16:16 + i*16])
+    # for i in range(8):
+    #     print(fatBS[i*16:16 + i*16])
 
     print()
     BPB_RsvdSecCnt = bToDec(fatBS[14:14+2])
@@ -64,9 +119,72 @@ if __name__ == "__main__":
 
     FirstDataSector = BPB_RsvdSecCnt + (BPB_NumFATs * BPB_FATSz32)
 
+    rsvdEnd = BPB_RsvdSecCnt * 512
+
     print(FirstDataSector)
     print(BPB_BytsPerSec)
 
-def hidden_data(file):
-    MBR = []
-    b = file.read(512*63)
+    file.read(rsvdEnd - 512) # - 512 because we already read 1 sector
+    fatTable = file.read(BPB_FATSz32 * 512)
+
+    # for i in range(4):
+    #     print(fatTable[i*16:16 + i*16])
+
+    table = []
+    for i in range(32):
+        b = fatTable[i*4:4 + i*4]
+        table.append(bToDec(b))
+        
+    print(table)
+
+    path = ["1", "BD"]
+
+    #Find the file
+    i = 0
+    nextAddr = 2 #Root dir
+    type = "dir"
+    while(nextAddr != -1):
+        if(i == len(path) - 1):
+            type = "file"
+
+        dirSec = firstSec(nextAddr, BPB_SecPerClus, FirstDataSector)
+        dir = readSecNumber(dirSec + fatsec, number=BPB_SecPerClus)
+        nextAddr, size = parseDir(dir, type=type, toFind=path[i])
+        print("NextAddr", nextAddr, " Size : ", size)
+
+        if(i == len(path) - 1):
+            break
+
+        i +=1
+
+    if(size == -1):
+        print("File not found")
+        exit(-1)
+
+    # Get the slack
+    leftToRead = size
+    clustSize = BPB_SecPerClus * 512
+    print(clustSize)
+
+    file = bytes()
+    while(True):
+
+        fileSec = firstSec(nextAddr, BPB_SecPerClus, FirstDataSector)
+        file += readSecNumber(fileSec + fatsec, number=BPB_SecPerClus)
+        
+        leftToRead -= clustSize
+        if(leftToRead < 0):#EOF
+            break
+        nextAddr = table[nextAddr]
+
+
+    slack = file[size:]
+    
+    for i in range(int(len(slack) / 8)):
+        formatted = "{:02x}{:02x} {:02x}{:02x} {:02x}{:02x} {:02x}{:02x}".format(
+            slack[i], slack[i+1],slack[i+2],slack[i+3],
+            slack[i+4],slack[i+5],slack[i+6],slack[i+7])
+        print(formatted)
+        
+
+
